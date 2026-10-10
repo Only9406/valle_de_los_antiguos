@@ -1,76 +1,110 @@
-extends Node
-## Progression data: talents, abilities, leveling.
+extends RefCounted
+## Progresion: experiencia, niveles, arbol de talentos y habilidades de cada clase.
 
+const MAX_LEVEL := 20
+
+## XP que se necesita para pasar de `level` a `level + 1`.
+static func xp_needed(level: int) -> int:
+	return int(50.0 * pow(float(level), 1.5))
+
+
+## XP al derrotar a cada tipo de enemigo.
+const KILL_XP := {"Minion": 25, "Rogue": 40, "Mage": 45, "Warrior": 65}
+
+## ----------------------------------------------------------------- talentos
 const BRANCHES := [
-    { "name": "fuerza", "color": Color(0.8, 0.2, 0.2) },
-    { "name": "precision", "color": Color(0.8, 0.8, 0.2) },
-    { "name": "devastador", "color": Color(0.8, 0.2, 0.8) },
-    { "name": "concentracion", "color": Color(0.2, 0.8, 0.2) },
-    { "name": "potencia", "color": Color(0.2, 0.2, 0.8) },
-    { "name": "maestro", "color": Color(0.8, 0.5, 0.2) },
-    { "name": "agilidad", "color": Color(0.2, 0.8, 0.8) },
-    { "name": "cosechador", "color": Color(0.8, 0.6, 0.2) },
+	{"name": "Combate", "color": Color(0.85, 0.3, 0.25)},
+	{"name": "Maestría", "color": Color(0.3, 0.5, 0.95)},
+	{"name": "Oficio", "color": Color(0.3, 0.75, 0.4)},
 ]
-
-const TIER_REQ := [0, 3, 8] # points needed in branch to unlock tier 1,2,3
+## Puntos que hay que gastar en una rama para desbloquear cada fila (tier 0, 1, 2).
+const TIER_REQ := [0, 3, 6]
 
 const TALENTS := {
-    "fuerza_1": { "name": "Fuerza I", "branch": 0, "tier": 0, "max": 5, "desc": "+5% daño" },
-    "fuerza_2": { "name": "Fuerza II", "branch": 0, "tier": 1, "max": 5, "desc": "+10% daño" },
-    "fuerza_3": { "name": "Fuerza III", "branch": 0, "tier": 2, "max": 5, "desc": "+15% daño" },
-    "precision_1": { "name": "Precisión I", "branch": 1, "tier": 0, "max": 5, "desc": "+3% crítica" },
-    "precision_2": { "name": "Precisión II", "branch": 1, "tier": 1, "max": 5, "desc": "+6% crítica" },
-    "precision_3": { "name": "Precisión III", "branch": 1, "tier": 2, "max": 5, "desc": "+9% crítica" },
-    "devastador_1": { "name": "Devastador I", "branch": 2, "tier": 0, "max": 5, "desc": "+0.8x daño crítico" },
-    "devastador_2": { "name": "Devastador II", "branch": 2, "tier": 1, "max": 5, "desc": "+1.0x daño crítico" },
-    "devastador_3": { "name": "Devastador III", "branch": 2, "tier": 2, "max": 5, "desc": "+1.2x daño crítico" },
-    "concentracion_1": { "name": "Concentración I", "branch": 3, "tier": 0, "max": 5, "desc": "-4% enfriamiento" },
-    "concentracion_2": { "name": "Concentración II", "branch": 3, "tier": 1, "max": 5, "desc": "-8% enfriamiento" },
-    "concentracion_3": { "name": "Concentración III", "branch": 3, "tier": 2, "max": 5, "desc": "-12% enfriamiento" },
-    "potencia_1": { "name": "Potencia I", "branch": 4, "tier": 0, "max": 5, "desc": "+8% daño de habilidad" },
-    "potencia_2": { "name": "Potencia II", "branch": 4, "tier": 1, "max": 5, "desc": "+16% daño de habilidad" },
-    "potencia_3": { "name": "Potencia III", "branch": 4, "tier": 2, "max": 5, "desc": "+24% daño de habilidad" },
-    "maestro_1": { "name": "Maestro I", "branch": 5, "tier": 0, "max": 5, "desc": "+15% daño de habilidad (ranura 3)" },
-    "maestro_2": { "name": "Maestro II", "branch": 5, "tier": 1, "max": 5, "desc": "+30% daño de habilidad (ranura 3)" },
-    "maestro_3": { "name": "Maestro III", "branch": 5, "tier": 2, "max": 5, "desc": "+45% daño de habilidad (ranura 3)" },
-    "agilidad_1": { "name": "Agilidad I", "branch": 6, "tier": 0, "max": 5, "desc": "+4% velocidad de movimiento" },
-    "agilidad_2": { "name": "Agilidad II", "branch": 6, "tier": 1, "max": 5, "desc": "+8% velocidad de movimiento" },
-    "agilidad_3": { "name": "Agilidad III", "branch": 6, "tier": 2, "max": 5, "desc": "+12% velocidad de movimiento" },
-    "cosechador_1": { "name": "Cosechador I", "branch": 7, "tier": 0, "max": 5, "desc": "-8% tiempo de recolección" },
-    "cosechador_2": { "name": "Cosechador II", "branch": 7, "tier": 1, "max": 5, "desc": "-16% tiempo de recolección" },
-    "cosechador_3": { "name": "Cosechador III", "branch": 7, "tier": 2, "max": 5, "desc": "-24% tiempo de recolección" },
+	"fuerza": {"branch": 0, "tier": 0, "name": "Fuerza", "max": 5,
+		"desc": "+5% de daño por rango."},
+	"precision": {"branch": 0, "tier": 1, "name": "Precisión", "max": 5,
+		"desc": "+3% de probabilidad de crítico por rango."},
+	"devastador": {"branch": 0, "tier": 2, "name": "Golpe devastador", "max": 3,
+		"desc": "+20% de daño crítico por rango."},
+	"concentracion": {"branch": 1, "tier": 0, "name": "Concentración", "max": 5,
+		"desc": "-4% de enfriamiento de las habilidades por rango."},
+	"potencia": {"branch": 1, "tier": 1, "name": "Potencia", "max": 5,
+		"desc": "+8% de daño de las habilidades por rango."},
+	"maestro": {"branch": 1, "tier": 2, "name": "Maestro de la definitiva", "max": 3,
+		"desc": "+15% de daño y -5% de enfriamiento de tu 4ª habilidad por rango."},
+	"agilidad": {"branch": 2, "tier": 0, "name": "Agilidad", "max": 5,
+		"desc": "+4% de velocidad de movimiento por rango."},
+	"cosechador": {"branch": 2, "tier": 1, "name": "Cosechador", "max": 5,
+		"desc": "-8% de tiempo de recolección y +10% de probabilidad de botín doble por rango."},
+	"sabiduria": {"branch": 2, "tier": 2, "name": "Sabiduría", "max": 3,
+		"desc": "+8% de experiencia ganada por rango."},
 }
 
-const QUESTS := {}
-
-# Abilities by class
-const ABILITIES_BY_CLASS := {
-    "Knight": [
-        { "name": "Golpe Feroz", "type": "cone", "unlock": 1, "cd": 4.0, "range": 2.5, "cos": 0.7, "mult": 1.8 },
-        { "name": "Onda de Choque", "type": "aoe_self", "unlock": 3, "cd": 6.0, "radius": 3.0, "mult": 1.5 },
-        { "name": "Fuego Sagrado", "type": "buff", "unlock": 5, "cd": 8.0, "duration": 5.0, "dmg": 0.2, "aspd": 0.1 },
-        { "name": "Luz Divina", "type": "projectile", "unlock": 7, "cd": 5.0, "kind": "Light", "color": Color(1.0, 1.0, 0.6), "speed": 20.0, "range": 15.0, "mult": 1.6 }
-    ]
+## --------------------------------------------------------------- habilidades
+## type: cone | aoe_self | dash | buff | projectile | volley | ground_aoe
+## unlock: nivel necesario. cd: enfriamiento (s). mult: multiplicador del dano del arma.
+## Efectos: stun (s), slow [factor, s], dot [mult por segundo, s].
+const ABILITIES := {
+	"Knight": [
+		{"name": "Golpe de escudo", "desc": "Golpe frontal que aturde 1,5 s.", "unlock": 1, "cd": 6.0,
+			"type": "cone", "range": 3.2, "cos": 0.3, "mult": 1.3, "stun": 1.5},
+		{"name": "Carga", "desc": "Embistes hacia delante aturdiendo a quien atraviesas.", "unlock": 2, "cd": 10.0,
+			"type": "dash", "dir": 1.0, "distance": 9.0, "speed": 22.0, "mult": 1.2, "stun": 0.8},
+		{"name": "Grito de guerra", "desc": "+30% de daño durante 8 s.", "unlock": 4, "cd": 20.0,
+			"type": "buff", "duration": 8.0, "dmg": 0.3, "aspd": 0.0},
+		{"name": "Juicio divino", "desc": "Onda de luz a tu alrededor que aturde.", "unlock": 6, "cd": 18.0,
+			"type": "aoe_self", "radius": 5.5, "mult": 2.2, "stun": 1.2},
+	],
+	"Barbarian": [
+		{"name": "Tajo brutal", "desc": "Hachazo frontal de gran daño.", "unlock": 1, "cd": 7.0,
+			"type": "cone", "range": 3.4, "cos": 0.2, "mult": 2.0},
+		{"name": "Torbellino", "desc": "Giras con el hacha golpeando alrededor.", "unlock": 2, "cd": 9.0,
+			"type": "aoe_self", "radius": 4.2, "mult": 1.4},
+		{"name": "Furia", "desc": "+40% de daño y +25% de velocidad de ataque 8 s.", "unlock": 4, "cd": 22.0,
+			"type": "buff", "duration": 8.0, "dmg": 0.4, "aspd": 0.25},
+		{"name": "Salto sísmico", "desc": "Saltas y aplastas el suelo aturdiendo.", "unlock": 6, "cd": 16.0,
+			"type": "dash", "dir": 1.0, "distance": 8.0, "speed": 14.0, "mult": 0.0, "leap": true,
+			"land_radius": 5.0, "land_mult": 2.4, "stun": 1.5},
+	],
+	"Mage": [
+		{"name": "Bola de fuego", "desc": "Proyectil que explota al impactar.", "unlock": 1, "cd": 5.0,
+			"type": "projectile", "kind": "orb", "color": Color(1.0, 0.45, 0.1), "speed": 20.0,
+			"range": 30.0, "mult": 2.2, "explode": 3.0},
+		{"name": "Nova de hielo", "desc": "Onda gélida que ralentiza a los enemigos.", "unlock": 2, "cd": 12.0,
+			"type": "aoe_self", "radius": 6.5, "mult": 1.2, "slow": [0.4, 4.0]},
+		{"name": "Parpadeo", "desc": "Te teletransportas hacia delante.", "unlock": 4, "cd": 9.0,
+			"type": "dash", "dir": 1.0, "distance": 10.0, "speed": 45.0, "mult": 0.0},
+		{"name": "Meteoro", "desc": "Un meteoro cae donde apuntas y aturde.", "unlock": 6, "cd": 24.0,
+			"type": "ground_aoe", "range": 28.0, "radius": 5.0, "mult": 3.5, "delay": 1.0,
+			"color": Color(1.0, 0.4, 0.1), "fall": true, "stun": 1.0},
+	],
+	"Rogue": [
+		{"name": "Puñalada venenosa", "desc": "Golpe que envenena al objetivo.", "unlock": 1, "cd": 6.0,
+			"type": "cone", "range": 2.8, "cos": 0.3, "mult": 1.5, "dot": [0.4, 4.0]},
+		{"name": "Paso sombrío", "desc": "Te desplazas rápidamente hacia delante.", "unlock": 2, "cd": 8.0,
+			"type": "dash", "dir": 1.0, "distance": 8.0, "speed": 32.0, "mult": 0.0},
+		{"name": "Lluvia de dagas", "desc": "Lanzas 5 dagas en abanico.", "unlock": 4, "cd": 10.0,
+			"type": "volley", "kind": "bolt", "color": Color(0.85, 0.85, 0.9), "speed": 36.0,
+			"range": 22.0, "count": 5, "spread": 36.0, "mult": 0.7},
+		{"name": "Frenesí", "desc": "+20% de daño y +50% de velocidad de ataque 8 s.", "unlock": 6, "cd": 22.0,
+			"type": "buff", "duration": 8.0, "dmg": 0.2, "aspd": 0.5},
+	],
+	"Ranger": [
+		{"name": "Disparo potente", "desc": "Flecha de gran daño y largo alcance.", "unlock": 1, "cd": 6.0,
+			"type": "projectile", "kind": "arrow", "color": Color(1.0, 0.9, 0.6), "speed": 50.0,
+			"range": 45.0, "mult": 2.6, "explode": 0.0},
+		{"name": "Salto atrás", "desc": "Saltas hacia atrás para ganar distancia.", "unlock": 2, "cd": 9.0,
+			"type": "dash", "dir": -1.0, "distance": 8.0, "speed": 26.0, "mult": 0.0},
+		{"name": "Tiro múltiple", "desc": "Disparas 5 flechas en abanico.", "unlock": 4, "cd": 14.0,
+			"type": "volley", "kind": "arrow", "color": Color(1.0, 0.9, 0.6), "speed": 40.0,
+			"range": 30.0, "count": 5, "spread": 28.0, "mult": 1.0},
+		{"name": "Lluvia de flechas", "desc": "Cae una lluvia de flechas que ralentiza.", "unlock": 6, "cd": 22.0,
+			"type": "ground_aoe", "range": 34.0, "radius": 6.0, "mult": 3.2, "delay": 0.8,
+			"color": Color(0.95, 0.85, 0.5), "fall": false, "slow": [0.5, 3.0]},
+	],
 }
 
-func abilities_of(class_name: String) -> Array:
-    return ABILITIES_BY_CLASS.get(class_name, [])
 
-func talent_rank(id: String) -> int:
-    # This should be backed by GameState; we'll just return 0 for now.
-    return 0
-
-func can_spend(id: String) -> bool:
-    return false
-
-func spend_talent(id: String) -> void:
-    pass
-
-func reset_talents() -> void:
-    pass
-
-func points_in_branch(branch: int) -> int:
-    return 0
-
-func tier_req(tier: int) -> int:
-    return TIER_REQ[tier] if tier < TIER_REQ.size() else 0
+static func abilities_of(class_id: String) -> Array:
+	return ABILITIES.get(class_id, ABILITIES["Knight"])

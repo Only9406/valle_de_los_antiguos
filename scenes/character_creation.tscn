@@ -1,8 +1,8 @@
-[gd_scene format=3 uid="uid://ctxnt6xjxmv7y"]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" uid="uid://pjppkkg8doml" path="res://scripts/character_creation.gd" id="1_cc"]
+[ext_resource type="Script" path="res://scripts/character_creation.gd" id="1_cc"]
 
-[node name="CreacionDePersonaje" type="Control" unique_id=1715003293]
+[node name="CreacionDePersonaje" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
